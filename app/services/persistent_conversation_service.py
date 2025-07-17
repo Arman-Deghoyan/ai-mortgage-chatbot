@@ -1,6 +1,6 @@
 """Database-persistent conversation service using linear state machine approach"""
 
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from langchain_openai import ChatOpenAI
 
@@ -17,7 +17,7 @@ class PersistentConversationService(LoggerMixin):
         self.llm = ChatOpenAI(api_key=openai_api_key, model="gpt-3.5-turbo")
         self.db = db_service
 
-    def start_new_conversation(self, user_id: Optional[str] = None) -> str:
+    def start_new_conversation(self, user_id: str | None = None) -> str:
         """Start a new conversation and return conversation ID"""
         conversation = self.db.create_conversation(user_id=user_id)
         return conversation.id
@@ -25,8 +25,8 @@ class PersistentConversationService(LoggerMixin):
     def process_message(
         self,
         user_message: str,
-        conversation_id: Optional[str] = None,
-    ) -> Dict[str, Any]:
+        conversation_id: str | None = None,
+    ) -> dict[str, Any]:
         """Process user message with database persistence"""
         try:
             # Create new conversation if none provided
@@ -41,37 +41,32 @@ class PersistentConversationService(LoggerMixin):
 
             self.logger.info(f"Processing step {step_number}: {user_message}")
 
-            # Update conversation step in database only if we advance
-            self.db.update_conversation_step(conversation_id, step_number)
-
-            # Process based on step
-            if step_number == 1:
-                response_data = self._handle_greeting(user_message, conversation_id)
-
-            elif step_number == 2:
-                response_data = self._handle_confirmation(user_message, conversation_id)
-
-            elif step_number == 3:
-                response_data = self._handle_income(user_message, conversation_id)
-
-            elif step_number == 4:
-                response_data = self._handle_debt(user_message, conversation_id)
-
-            elif step_number == 5:
-                response_data = self._handle_credit(user_message, conversation_id)
-
-            elif step_number == 6:
-                response_data = self._handle_property(user_message, conversation_id)
-
-            elif step_number == 7:
-                response_data = self._handle_down_payment(user_message, conversation_id)
-
-            else:
-                response_data = {
-                    "response": "Assessment completed. Would you like to start over?",
-                    "conversation_complete": True,
-                    "assessment_result": None,
-                }
+            # Process based on step using match-case
+            match step_number:
+                case 1:
+                    response_data = self._handle_greeting(user_message, conversation_id)
+                case 2:
+                    response_data = self._handle_confirmation(
+                        user_message, conversation_id
+                    )
+                case 3:
+                    response_data = self._handle_income(user_message, conversation_id)
+                case 4:
+                    response_data = self._handle_debt(user_message, conversation_id)
+                case 5:
+                    response_data = self._handle_credit(user_message, conversation_id)
+                case 6:
+                    response_data = self._handle_property(user_message, conversation_id)
+                case 7:
+                    response_data = self._handle_down_payment(
+                        user_message, conversation_id
+                    )
+                case _:  # Default case
+                    response_data = {
+                        "response": "Assessment completed. Would you like to start over?",
+                        "conversation_complete": True,
+                        "assessment_result": None,
+                    }
 
             # Save assistant response to database
             self.db.add_message(conversation_id, "assistant", response_data["response"])
@@ -79,6 +74,9 @@ class PersistentConversationService(LoggerMixin):
             # Mark conversation as completed if finished
             if response_data.get("conversation_complete"):
                 self.db.complete_conversation(conversation_id)
+            else:
+                # Update conversation step in database only if conversation continues
+                self.db.update_conversation_step(conversation_id, step_number)
 
             # Add conversation_id to response
             response_data["conversation_id"] = conversation_id
@@ -107,40 +105,78 @@ class PersistentConversationService(LoggerMixin):
     def _determine_conversation_step(self, conversation_id: str) -> int:
         """Determine conversation step based on completed data, not just message count"""
         try:
+            # Check conversation status first - if completed, don't advance steps
+            conversation = self.db.get_conversation(conversation_id)
+            if conversation and conversation.status == "completed":
+                # Return a step that indicates conversation is done
+                return 8  # Assessment complete/conversation ended
+
             # Get conversation messages to understand flow
             messages = self.db.get_conversation_messages(conversation_id)
             user_messages = [msg for msg in messages if msg.role == "user"]
-            
+            assistant_messages = [msg for msg in messages if msg.role == "assistant"]
+
             # If no messages yet, we're at step 1 (greeting)
             if not user_messages:
                 return 1
-            
-            # If only one message, we're at step 2 (confirmation)
+
+            # If only one user message, we're processing the initial greeting
             if len(user_messages) == 1:
+                return 1
+
+            # If we have 2 user messages, we're processing the confirmation response
+            if len(user_messages) == 2:
                 return 2
-                
+
+            # For 2+ messages, need to check if user proceeded or declined
+            # Look at the last assistant message to understand the flow
+            assistant_messages = [msg for msg in messages if msg.role == "assistant"]
+            if assistant_messages:
+                last_response = assistant_messages[-1].content.lower()
+                # If the last response was a decline message, we're done
+                if (
+                    "feel free to come back" in last_response
+                    or "have a great day" in last_response
+                ):
+                    return 8  # Conversation ended
+
             # Get user inputs to see what data we have
             user_inputs = self.db.get_user_inputs(conversation_id)
-            
+
             # For 3+ messages, check completed data to determine where we are
             if not user_inputs:
                 # User confirmed but no data saved yet, need income
                 return 3
-                
-            # Check what data we have completed
+
+            # Check what data we have completed using match-case pattern
+            missing_field = None
             if user_inputs.annual_income is None:
-                return 3  # Need income
+                missing_field = "income"
             elif user_inputs.monthly_debt is None:
-                return 4  # Need debt
+                missing_field = "debt"
             elif user_inputs.credit_score_category is None:
-                return 5  # Need credit score
+                missing_field = "credit"
             elif user_inputs.property_value is None:
-                return 6  # Need property value
+                missing_field = "property"
             elif user_inputs.down_payment is None:
-                return 7  # Need down payment
+                missing_field = "down_payment"
             else:
-                return 8  # Assessment complete
-                
+                missing_field = "complete"
+
+            match missing_field:
+                case "income":
+                    return 3  # Need income
+                case "debt":
+                    return 4  # Need debt
+                case "credit":
+                    return 5  # Need credit score
+                case "property":
+                    return 6  # Need property value
+                case "down_payment":
+                    return 7  # Need down payment
+                case _:  # complete
+                    return 8  # Assessment complete
+
         except Exception as e:
             self.logger.error("Error determining conversation step", error=str(e))
             # Fallback to message count if determination fails
@@ -150,7 +186,7 @@ class PersistentConversationService(LoggerMixin):
 
     def _handle_greeting(
         self, user_message: str, conversation_id: str
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Handle initial greeting"""
         response = "Hello! Welcome to the Mortgage Advisor chatbot. I'm here to assist you with a preliminary mortgage eligibility assessment. Would you like to begin the assessment process today? Just let me know when you're ready to get started!"
 
@@ -162,7 +198,7 @@ class PersistentConversationService(LoggerMixin):
 
     def _handle_confirmation(
         self, user_message: str, conversation_id: str
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Handle confirmation and ask for income"""
         try:
             confirmation_prompt = f"""
@@ -179,24 +215,34 @@ Response:"""
 
             response = self.llm.invoke(confirmation_prompt).content.strip()
 
+            # Determine response type for cleaner switch-case
+            response_type = None
             if "PROCEED" in response.upper():
-                return {
-                    "response": "Great! Let's get started with your mortgage assessment. First, I'll need to know your annual income. Please tell me your total yearly income before taxes.",
-                    "conversation_complete": False,
-                    "assessment_result": None,
-                }
+                response_type = "proceed"
             elif "DECLINE" in response.upper():
-                return {
-                    "response": "No problem! Feel free to come back anytime when you're ready to explore your mortgage options. Have a great day!",
-                    "conversation_complete": True,
-                    "assessment_result": None,
-                }
+                response_type = "decline"
             else:
-                return {
-                    "response": "I want to make sure I understand correctly. Are you interested in getting a mortgage eligibility assessment today? Please let me know with a simple yes or no.",
-                    "conversation_complete": False,
-                    "assessment_result": None,
-                }
+                response_type = "unclear"
+
+            match response_type:
+                case "proceed":
+                    return {
+                        "response": "Great! Let's get started with your mortgage assessment. First, I'll need to know your annual income. Please tell me your total yearly income before taxes.",
+                        "conversation_complete": False,
+                        "assessment_result": None,
+                    }
+                case "decline":
+                    return {
+                        "response": "No problem! Feel free to come back anytime when you're ready to explore your mortgage options. Have a great day!",
+                        "conversation_complete": True,
+                        "assessment_result": None,
+                    }
+                case _:  # unclear or any other case
+                    return {
+                        "response": "I want to make sure I understand correctly. Are you interested in getting a mortgage eligibility assessment today? Please let me know with a simple yes or no.",
+                        "conversation_complete": False,
+                        "assessment_result": None,
+                    }
 
         except Exception as e:
             self.logger.error("Error in confirmation handling", error=str(e))
@@ -206,7 +252,7 @@ Response:"""
                 "assessment_result": None,
             }
 
-    def _handle_income(self, user_message: str, conversation_id: str) -> Dict[str, Any]:
+    def _handle_income(self, user_message: str, conversation_id: str) -> dict[str, Any]:
         """Handle income input and ask for debt"""
         try:
             income_prompt = f"""
@@ -254,7 +300,7 @@ Response:"""
                 "assessment_result": None,
             }
 
-    def _handle_debt(self, user_message: str, conversation_id: str) -> Dict[str, Any]:
+    def _handle_debt(self, user_message: str, conversation_id: str) -> dict[str, Any]:
         """Handle debt input and ask for credit score"""
         try:
             debt_prompt = f"""
@@ -266,7 +312,8 @@ Instructions:
 - Extract the numeric value representing monthly debt payments
 - Convert to a float (e.g., "1500" -> 1500.0, "1.5k" -> 1500.0)
 - If you find a valid debt amount, respond with just the number
-- If no debt or zero debt, respond with "0"
+- If user explicitly says they have "no debt", "zero debt", or "0", respond with "0"
+- If user says "I don't know", "not sure", "unclear", or provides non-numeric responses, respond with "INVALID"
 - If no valid amount found, respond with "INVALID"
 
 Response:"""
@@ -303,7 +350,7 @@ Response:"""
                 "assessment_result": None,
             }
 
-    def _handle_credit(self, user_message: str, conversation_id: str) -> Dict[str, Any]:
+    def _handle_credit(self, user_message: str, conversation_id: str) -> dict[str, Any]:
         """Handle credit score and ask for property value"""
         try:
             credit_prompt = f"""
@@ -351,7 +398,7 @@ Response:"""
 
     def _handle_property(
         self, user_message: str, conversation_id: str
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Handle property value and ask for down payment"""
         try:
             property_prompt = f"""
@@ -401,7 +448,7 @@ Response:"""
 
     def _handle_down_payment(
         self, user_message: str, conversation_id: str
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Handle down payment and provide assessment"""
         try:
             down_payment_prompt = f"""
@@ -472,11 +519,11 @@ Response:"""
         # Simple completion message - detailed results shown in UI component
         return "✅ Your mortgage assessment is complete! Please see the detailed results below."
 
-    def get_conversation_history(self, conversation_id: str) -> List[Dict[str, Any]]:
+    def get_conversation_history(self, conversation_id: str) -> list[dict[str, Any]]:
         """Get conversation history from database"""
         return self.db.get_conversation_history_for_service(conversation_id)
 
-    def continue_conversation(self, conversation_id: str) -> Optional[Dict[str, Any]]:
+    def continue_conversation(self, conversation_id: str) -> dict[str, Any] | None:
         """Check if a conversation exists and can be continued"""
         conversation = self.db.get_conversation(conversation_id)
         if conversation and conversation.status == "in_progress":

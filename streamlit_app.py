@@ -1,5 +1,5 @@
 # Configuration
-from typing import Any, Dict
+from typing import Any
 
 import requests
 import streamlit as st
@@ -102,7 +102,7 @@ def check_api_health() -> bool:
         return False
 
 
-def send_message(message: str) -> Dict[str, Any]:
+def send_message(message: str) -> dict[str, Any]:
     """Send a message to the chatbot API"""
     try:
         # Get conversation ID from session state
@@ -179,7 +179,7 @@ def display_message(role: str, content: str):
         )
 
 
-def display_assessment_result(assessment: Dict[str, Any]):
+def display_assessment_result(assessment: dict[str, Any]):
     """Display the mortgage assessment result"""
     st.markdown('<div class="assessment-card">', unsafe_allow_html=True)
     st.markdown("### 📋 Mortgage Assessment Result")

@@ -1,7 +1,5 @@
 """Database service for managing conversations and messages"""
 
-from typing import List, Optional
-
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
@@ -16,7 +14,7 @@ class DatabaseService(LoggerMixin):
     def __init__(self, db_session: Session):
         self.db = db_session
 
-    def create_conversation(self, user_id: Optional[str] = None) -> Conversation:
+    def create_conversation(self, user_id: str | None = None) -> Conversation:
         """Create a new conversation"""
         try:
             conversation = Conversation(user_id=user_id)
@@ -33,7 +31,7 @@ class DatabaseService(LoggerMixin):
             self.logger.error("Failed to create conversation", error=str(e))
             raise
 
-    def get_conversation(self, conversation_id: str) -> Optional[Conversation]:
+    def get_conversation(self, conversation_id: str) -> Conversation | None:
         """Get conversation by ID"""
         try:
             conversation = (
@@ -88,7 +86,7 @@ class DatabaseService(LoggerMixin):
 
     def add_message(
         self, conversation_id: str, role: str, content: str
-    ) -> Optional[Message]:
+    ) -> Message | None:
         """Add a message to conversation"""
         try:
             message = Message(
@@ -107,7 +105,7 @@ class DatabaseService(LoggerMixin):
             self.logger.error("Failed to add message", error=str(e))
             return None
 
-    def get_conversation_messages(self, conversation_id: str) -> List[Message]:
+    def get_conversation_messages(self, conversation_id: str) -> list[Message]:
         """Get all messages for a conversation"""
         try:
             messages = (
@@ -162,7 +160,7 @@ class DatabaseService(LoggerMixin):
             self.logger.error("Failed to update user input field", error=str(e))
             return False
 
-    def get_user_inputs(self, conversation_id: str) -> Optional[UserInputs]:
+    def get_user_inputs(self, conversation_id: str) -> UserInputs | None:
         """Get user inputs as pydantic model"""
         try:
             user_input = (
@@ -178,7 +176,7 @@ class DatabaseService(LoggerMixin):
             self.logger.error("Failed to get user inputs", error=str(e))
             return None
 
-    def get_conversation_history_for_service(self, conversation_id: str) -> List[dict]:
+    def get_conversation_history_for_service(self, conversation_id: str) -> list[dict]:
         """Get conversation history in format expected by conversation service"""
         messages = self.get_conversation_messages(conversation_id)
         return [

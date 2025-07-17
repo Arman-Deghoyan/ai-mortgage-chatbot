@@ -1,5 +1,4 @@
 from enum import Enum
-from typing import List, Optional
 
 from pydantic import BaseModel, Field
 
@@ -18,11 +17,11 @@ class AssessmentOutcome(str, Enum):
 
 
 class UserInputs(BaseModel):
-    annual_income: Optional[float] = None
-    monthly_debt: Optional[float] = None
-    credit_score_category: Optional[CreditScoreCategory] = None
-    property_value: Optional[float] = None
-    down_payment: Optional[float] = None
+    annual_income: float | None = None
+    monthly_debt: float | None = None
+    credit_score_category: CreditScoreCategory | None = None
+    property_value: float | None = None
+    down_payment: float | None = None
 
     def is_complete(self) -> bool:
         return all(
@@ -59,11 +58,11 @@ class ChatMessage(BaseModel):
 
 class ChatRequest(BaseModel):
     message: str = Field(..., description="User's message")
-    conversation_id: Optional[str] = Field(
+    conversation_id: str | None = Field(
         default=None,
         description="Conversation ID for persistence (optional for new conversations)",
     )
-    conversation_history: List[ChatMessage] = Field(
+    conversation_history: list[ChatMessage] = Field(
         default_factory=list,
         description="Previous conversation history (deprecated, kept for compatibility)",
     )
@@ -75,7 +74,7 @@ class ChatResponse(BaseModel):
     conversation_complete: bool = Field(
         default=False, description="Whether the conversation is complete"
     )
-    assessment_result: Optional[MortgageAssessmentResult] = Field(
+    assessment_result: MortgageAssessmentResult | None = Field(
         default=None, description="Final assessment if conversation is complete"
     )
 
@@ -85,7 +84,7 @@ class ConversationState(BaseModel):
     current_step: str = Field(
         default="greeting", description="Current step in the conversation flow"
     )
-    conversation_history: List[ChatMessage] = Field(default_factory=list)
+    conversation_history: list[ChatMessage] = Field(default_factory=list)
     is_complete: bool = Field(default=False)
 
 

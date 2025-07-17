@@ -1,7 +1,7 @@
 """Pytest configuration and fixtures for the AI Mortgage Advisor Chatbot."""
 
 import os
-from typing import Any, Dict
+from typing import Any
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -174,7 +174,7 @@ def sample_chat_request() -> ChatRequest:
 
 
 @pytest.fixture
-def sample_assessment_result() -> Dict[str, Any]:
+def sample_assessment_result() -> dict[str, Any]:
     """Create a sample assessment result for testing."""
     return {
         "user_inputs": {

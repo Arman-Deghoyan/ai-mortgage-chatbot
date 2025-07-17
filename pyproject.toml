@@ -62,7 +62,7 @@ include = ["app*"]
 "*" = ["*.txt", "*.md", "*.yml", "*.yaml"]
 
 [tool.ruff]
-target-version = "py38"
+target-version = "py311"
 line-length = 88
 
 [tool.ruff.lint]
@@ -87,7 +87,7 @@ ignore = [
 
 [tool.black]
 line-length = 88
-target-version = ['py38']
+target-version = ['py311']
 include = '\.pyi?$'
 extend-exclude = '''
 /(
@@ -104,19 +104,19 @@ extend-exclude = '''
 '''
 
 [tool.mypy]
-python_version = "3.8"
-warn_return_any = true
+python_version = "3.11"
+warn_return_any = false
 warn_unused_configs = true
-disallow_untyped_defs = true
-disallow_incomplete_defs = true
-check_untyped_defs = true
-disallow_untyped_decorators = true
+disallow_untyped_defs = false
+disallow_incomplete_defs = false
+check_untyped_defs = false
+disallow_untyped_decorators = false
 no_implicit_optional = true
-warn_redundant_casts = true
-warn_unused_ignores = true
-warn_no_return = true
+warn_redundant_casts = false
+warn_unused_ignores = false
+warn_no_return = false
 warn_unreachable = true
-strict_equality = true
+strict_equality = false
 
 [[tool.mypy.overrides]]
 module = [

@@ -7,7 +7,7 @@ with proper formatting, context management, and log levels.
 
 import logging
 import sys
-from typing import Any, Optional
+from typing import Any
 
 import structlog
 from structlog.stdlib import LoggerFactory
@@ -117,8 +117,8 @@ def log_function_call(func_name: str, **kwargs: Any) -> structlog.stdlib.BoundLo
 def log_api_request(
     method: str,
     path: str,
-    status_code: Optional[int] = None,
-    duration_ms: Optional[float] = None,
+    status_code: int | None = None,
+    duration_ms: float | None = None,
     **kwargs: Any,
 ) -> structlog.stdlib.BoundLogger:
     """
@@ -145,8 +145,8 @@ def log_api_request(
 
 
 def log_mortgage_calculation(
-    user_id: Optional[str] = None,
-    calculation_type: Optional[str] = None,
+    user_id: str | None = None,
+    calculation_type: str | None = None,
     **kwargs: Any,
 ) -> structlog.stdlib.BoundLogger:
     """
@@ -169,9 +169,9 @@ def log_mortgage_calculation(
 
 
 def log_llm_interaction(
-    model: Optional[str] = None,
-    tokens_used: Optional[int] = None,
-    response_time_ms: Optional[float] = None,
+    model: str | None = None,
+    tokens_used: int | None = None,
+    response_time_ms: float | None = None,
     **kwargs: Any,
 ) -> structlog.stdlib.BoundLogger:
     """
