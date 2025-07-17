@@ -36,20 +36,12 @@ class PersistentConversationService(LoggerMixin):
             # Save user message to database
             self.db.add_message(conversation_id, "user", user_message)
 
-            # Get conversation history from database
-            conversation_history = self.db.get_conversation_history_for_service(
-                conversation_id
-            )
-
-            # Count user messages to determine what step we're on
-            user_messages = [
-                msg for msg in conversation_history if msg["role"] == "user"
-            ]
-            step_number = len(user_messages)  # Already includes current message
+            # Determine what step we're on based on completed data, not just message count
+            step_number = self._determine_conversation_step(conversation_id)
 
             self.logger.info(f"Processing step {step_number}: {user_message}")
 
-            # Update conversation step in database
+            # Update conversation step in database only if we advance
             self.db.update_conversation_step(conversation_id, step_number)
 
             # Process based on step
@@ -111,6 +103,50 @@ class PersistentConversationService(LoggerMixin):
                 pass  # Don't fail if we can't save error message
 
             return error_response
+
+    def _determine_conversation_step(self, conversation_id: str) -> int:
+        """Determine conversation step based on completed data, not just message count"""
+        try:
+            # Get conversation messages to understand flow
+            messages = self.db.get_conversation_messages(conversation_id)
+            user_messages = [msg for msg in messages if msg.role == "user"]
+            
+            # If no messages yet, we're at step 1 (greeting)
+            if not user_messages:
+                return 1
+            
+            # If only one message, we're at step 2 (confirmation)
+            if len(user_messages) == 1:
+                return 2
+                
+            # Get user inputs to see what data we have
+            user_inputs = self.db.get_user_inputs(conversation_id)
+            
+            # For 3+ messages, check completed data to determine where we are
+            if not user_inputs:
+                # User confirmed but no data saved yet, need income
+                return 3
+                
+            # Check what data we have completed
+            if user_inputs.annual_income is None:
+                return 3  # Need income
+            elif user_inputs.monthly_debt is None:
+                return 4  # Need debt
+            elif user_inputs.credit_score_category is None:
+                return 5  # Need credit score
+            elif user_inputs.property_value is None:
+                return 6  # Need property value
+            elif user_inputs.down_payment is None:
+                return 7  # Need down payment
+            else:
+                return 8  # Assessment complete
+                
+        except Exception as e:
+            self.logger.error("Error determining conversation step", error=str(e))
+            # Fallback to message count if determination fails
+            messages = self.db.get_conversation_messages(conversation_id)
+            user_messages = [msg for msg in messages if msg.role == "user"]
+            return len(user_messages)
 
     def _handle_greeting(
         self, user_message: str, conversation_id: str
